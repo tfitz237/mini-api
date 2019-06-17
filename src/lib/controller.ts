@@ -8,24 +8,23 @@ export function Controller(route: string = DEFAULT_ROUTE): ClassDecorator {
     return function(target: any) {
         var original = target;
         var f : any = function (...args) {
-            
+
             const instance = Injector.resolve(original);
             Reflect.defineMetadata(METADATAKEYS.ROUTE, route, instance);
             return instance;
         }
         f.prototype = original.prototype;
-        return f;       
+        return f;
     }
 }
 
 export function Get(route: string = DEFAULT_ROUTE): MethodDecorator {
     return function(target: any, propKey: string, descriptor) {
         const routes = route.split('/');
-        
+
         for(var i = 0; i < routes.length; i++) {
             if (routes[i] && routes[i].includes('{') && routes[i].includes('}')) {
                 const paramName = routes[i].replace('{', '').replace('}', '');
-                console.info(paramName);
                 const params = Reflect.getMetadata(METADATAKEYS.PARAMS, descriptor.value);
                 if (params) {
                     params.push(paramName);
@@ -33,8 +32,8 @@ export function Get(route: string = DEFAULT_ROUTE): MethodDecorator {
                     Reflect.defineMetadata(METADATAKEYS.PARAMS, [paramName], descriptor.value);
                 }
             }
-        }            
-        
+        }
+
         Reflect.defineMetadata(METADATAKEYS.ROUTE, route, descriptor.value);
         Reflect.defineMetadata(METADATAKEYS.METHOD, 'get', descriptor.value);
     }
@@ -59,12 +58,11 @@ export async function FindControllers() {
     const controllers = {};
     for (var file of files) {
         const pkg = await import(path.join(__dirname, '..', file));
-        console.log(pkg.default);
         const controller = new pkg.default();
         if (Reflect.hasMetadata(METADATAKEYS.ROUTE, controller)) {
             Reflect.defineMetadata(METADATAKEYS.CONTROLLER_METHODS, findMethods(controller), controller);
-            
-            controllers[Reflect.getMetadata(METADATAKEYS.ROUTE, controller)] = controller;   
+
+            controllers[Reflect.getMetadata(METADATAKEYS.ROUTE, controller)] = controller;
         }
     }
     return controllers;
@@ -76,7 +74,7 @@ export function findMethods(instance: Object): ControllerMethod[] {
     var rtn = [];
     for(let i of Object.values(
         Object.getOwnPropertyDescriptors(instance.constructor.prototype))
-            .filter(x => typeof x.value == 'function' 
+            .filter(x => typeof x.value == 'function'
             && x.value.name != instance.constructor.prototype.name
             && Reflect.hasMetadata(METADATAKEYS.METHOD, x.value)
             && Reflect.hasMetadata(METADATAKEYS.ROUTE, x.value)

@@ -12,22 +12,6 @@ export default class AppController {
         return {response, time: Date.now()};
     }
 
-    @Header('Content-Type', 'text/html')
-    @Get('html')
-    html() {
-        return `<!DOCTYPE html>
-<html>
-    <head>
-        <title>Hello World</title>
-    </head>
-    <body>
-        <p>
-            I'm a little teapot short and stout
-        </p>
-    </body>
-</html>
-        `;
-    }
 
     @Get('{test}')
     home(test: string) {
