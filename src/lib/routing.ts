@@ -1,41 +1,49 @@
 import { FindControllers, METADATAKEYS, ControllerMethod } from './controller';
 import * as http from 'http';
 import 'reflect-metadata';
+
 export default class Routing {
     controllers: {[route: string]: any};
+    
     async initialize() {
         this.controllers = await FindControllers();
     }
+
     async route(req: http.IncomingMessage, res: http.ServerResponse) {         
         const controller = this.findController(req);
+        const response = {
+            statusCode: 404,
+            body: {
+                statusCode: 404
+            },
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        };
         if (controller) {
             const method = this.findMethod(req, controller);
-            if (method) {
-                const response = controller[method.exec](...method.params);
-                if (response) {
-                    if (method.headers) {
-                        res.writeHead(200, method.headers);
-                        if (method.headers['Content-Type'] && method.headers['Content-Type'].includes('text') && typeof response === 'string') {
-                            res.write(response);
-                        } else {
-                            res.write(JSON.stringify(response));
-                        }
-                    } else {
-                        res.writeHead(200, {'Content-Type': 'application/json'});
-                        res.write(JSON.stringify(response));
+            if (method) {  
+                if (method.headers) {
+                    for (let name in method.headers) {
+                        response.headers[name] = method.headers[name];
                     }
-                    
-                    res.end();
+                }                         
+                const result = controller[method.exec](...method.params);
+                if (result !== undefined) {
+                    response.body = result !== undefined ? result : response.body;
                 }
-            } else {
-                res.writeHead(404);
-                res.end();                   
             }
-        } else {
-            res.writeHead(404);
-            res.end();
         }
-        
+        res.writeHead(response.statusCode, response.headers);
+        res.write(this.outputResult(response.headers, response.body));
+        res.end();       
+    }
+
+    outputResult(headers, result) {
+        if (headers['Content-Type'] && headers['Content-Type'].includes('text') && typeof result === 'string') {
+            return result;
+        }
+        return JSON.stringify(result);
     }
     
     findController(req: http.IncomingMessage) {
@@ -44,13 +52,11 @@ export default class Routing {
 
     getPath(req: http.IncomingMessage) {
         let routing = req.url.replace('/api', '').split('/');
-        if (routing.length == 0) {
-            routing.push('');
+        if (routing.length === 0) {
+            routing.push(DEFAULT_ROUTE);
             return routing;
-        } else {
-            return routing.splice(1);
-        }
-
+        }         
+        return routing.splice(1);
     }
 
     getController(path: string[]) {
@@ -58,9 +64,8 @@ export default class Routing {
     }
 
     getRoute(path: string[]) {
-        const a = path.join('/').replace(this.getController(path)+'/', '');
-        return a || DEFAULT_ROUTE;
-
+        const a = path.join('/').replace(new RegExp(this.getController(path)+'\/?'), '');
+        return a;
     }
 
     getRouteParams(path: string[]) {
@@ -80,12 +85,11 @@ export default class Routing {
         if (regexRoute != DEFAULT_ROUTE) {
             const regex = new RegExp(regexRoute);
             const match = incomingRoute.match(regex);
-            if (match && (match[0] || match[0] == '')) {
+            if (match && (match[0] || match[0] === DEFAULT_ROUTE)) {
                 return true;
             }
         }
         return false;
-
     }
 
     findMethod(req, controller) {
@@ -94,7 +98,7 @@ export default class Routing {
             this.routeMatches(req, x)         
             );
         if (method) {
-            method.params = method.params ? method.params.map((x, i) => this.getRouteParams(this.getPath(req))[i]): [];
+            method.params = method.params ? method.params.map((x, i) => this.getRouteParams(this.getPath(req))[i]) : [];
             return method;
         }
     }
